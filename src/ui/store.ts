@@ -6,6 +6,7 @@
 import { useReducer } from 'react';
 import type { Element } from '../data/types';
 import { IllegalActionError, applyAction } from '../engine/reducer';
+import { playForEvent } from './sound';
 import { createGame, type SetupOptions } from '../engine/setup';
 import type { Action, GameEvent, GameState } from '../engine/types';
 
@@ -61,6 +62,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       if (!state.game) return state;
       try {
         const { state: game, events } = applyAction(state.game, action.action);
+        for (const event of events) playForEvent(event);
         const dice = [...events].reverse().find((e) => e.dice);
         return {
           ...state,

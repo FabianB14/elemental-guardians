@@ -207,14 +207,15 @@ describe('statuses', () => {
 
   it('auras: Fire Fairy Kindle and Water Golem Bulwark', async () => {
     const { effectiveAtk, effectiveDef } = await import('../stats');
+    const { unitDef } = await import('../../data/units');
     const state = newGame(['fire', 'water']);
-    const goblin = place(state, 'fire-goblin', { x: 5, y: 8 }, 'fire'); // ATK 2
+    const goblin = place(state, 'fire-goblin', { x: 5, y: 8 }, 'fire');
     place(state, 'fire-fairy', { x: 5, y: 7 }, 'fire');
-    expect(effectiveAtk(state, goblin)).toBe(3);
+    expect(effectiveAtk(state, goblin)).toBe(unitDef('fire-goblin').atk + 1);
 
-    const naiad = place(state, 'water-naiad', { x: 2, y: 8 }, 'water'); // DEF 1
+    const naiad = place(state, 'water-naiad', { x: 2, y: 8 }, 'water');
     place(state, 'water-golem', { x: 2, y: 7 }, 'water');
-    expect(effectiveDef(state, naiad)).toBe(2);
+    expect(effectiveDef(state, naiad)).toBe(unitDef('water-naiad').def + 1);
   });
 
   it('support: Naiad heals instead of attacking', () => {

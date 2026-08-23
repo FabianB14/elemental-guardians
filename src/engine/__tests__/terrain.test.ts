@@ -5,7 +5,10 @@ import { Rng } from '../rng';
 import { effectiveAtk, effectiveDef, effectiveMov } from '../stats';
 import type { GameEvent, GameState, Unit } from '../types';
 import { newGame, place } from './helpers';
+import { unitDef } from '../../data/units';
 import type { TerrainType } from '../../data/types';
+
+const base = (defId: string) => unitDef(defId);
 
 function onTerrain(state: GameState, unit: Unit, terrain: TerrainType) {
   state.tiles[idx(state, unit.pos)]!.terrain = terrain;
@@ -14,13 +17,13 @@ function onTerrain(state: GameState, unit: Unit, terrain: TerrainType) {
 describe('terrain modifiers', () => {
   it('Volcanic: Fire +1 ATK, Water -1 ATK, others unchanged', () => {
     const state = newGame(['fire', 'water', 'wind', 'earth']);
-    const fire = place(state, 'fire-ogre', { x: 1, y: 5 }, 'fire'); // ATK 3
-    const water = place(state, 'water-trident', { x: 3, y: 5 }, 'water'); // ATK 2
-    const wind = place(state, 'wind-griffin', { x: 5, y: 5 }, 'wind'); // ATK 2
+    const fire = place(state, 'fire-ogre', { x: 1, y: 5 }, 'fire');
+    const water = place(state, 'water-trident', { x: 3, y: 5 }, 'water');
+    const wind = place(state, 'wind-griffin', { x: 5, y: 5 }, 'wind');
     for (const unit of [fire, water, wind]) onTerrain(state, unit, 'volcanic');
-    expect(effectiveAtk(state, fire)).toBe(4);
-    expect(effectiveAtk(state, water)).toBe(1);
-    expect(effectiveAtk(state, wind)).toBe(2);
+    expect(effectiveAtk(state, fire)).toBe(base('fire-ogre').atk + 1);
+    expect(effectiveAtk(state, water)).toBe(base('water-trident').atk - 1);
+    expect(effectiveAtk(state, wind)).toBe(base('wind-griffin').atk);
   });
 
   it('Tide: Water +1 ATK, Fire -1 ATK', () => {
@@ -29,38 +32,38 @@ describe('terrain modifiers', () => {
     const water = place(state, 'water-trident', { x: 3, y: 5 }, 'water');
     onTerrain(state, fire, 'tide');
     onTerrain(state, water, 'tide');
-    expect(effectiveAtk(state, fire)).toBe(2);
-    expect(effectiveAtk(state, water)).toBe(3);
+    expect(effectiveAtk(state, fire)).toBe(base('fire-ogre').atk - 1);
+    expect(effectiveAtk(state, water)).toBe(base('water-trident').atk + 1);
   });
 
   it('Gale: Wind +1 MOV, Earth -1 MOV (min 1)', () => {
     const state = newGame(['wind', 'earth']);
-    const wind = place(state, 'wind-unicorn', { x: 1, y: 5 }, 'wind'); // MOV 3
+    const wind = place(state, 'wind-unicorn', { x: 1, y: 5 }, 'wind');
     const dwarf = place(state, 'earth-dwarf', { x: 3, y: 5 }, 'earth'); // MOV 1
     onTerrain(state, wind, 'gale');
     onTerrain(state, dwarf, 'gale');
-    expect(effectiveMov(state, wind)).toBe(4);
+    expect(effectiveMov(state, wind)).toBe(base('wind-unicorn').mov + 1);
     expect(effectiveMov(state, dwarf)).toBe(1); // floored at 1
   });
 
   it('Stone: Earth +1 DEF, Wind -1 ATK', () => {
     const state = newGame(['wind', 'earth']);
-    const earth = place(state, 'earth-treant', { x: 1, y: 5 }, 'earth'); // DEF 3
-    const wind = place(state, 'wind-unicorn', { x: 3, y: 5 }, 'wind'); // ATK 2
+    const earth = place(state, 'earth-treant', { x: 1, y: 5 }, 'earth');
+    const wind = place(state, 'wind-unicorn', { x: 3, y: 5 }, 'wind');
     onTerrain(state, earth, 'stone');
     onTerrain(state, wind, 'stone');
-    expect(effectiveDef(state, earth)).toBe(4);
-    expect(effectiveAtk(state, wind)).toBe(1);
+    expect(effectiveDef(state, earth)).toBe(base('earth-treant').def + 1);
+    expect(effectiveAtk(state, wind)).toBe(base('wind-unicorn').atk - 1);
   });
 
   it('Blighted: all guardian troops -1 DEF; gods and evil untouched', () => {
     const state = newGame(['fire']);
-    const troop = place(state, 'fire-ogre', { x: 1, y: 5 }, 'fire'); // DEF 2
-    const imp = place(state, 'shadow-imp', { x: 3, y: 5 }); // DEF 1
+    const troop = place(state, 'fire-ogre', { x: 1, y: 5 }, 'fire');
+    const imp = place(state, 'shadow-imp', { x: 3, y: 5 });
     onTerrain(state, troop, 'blighted');
     onTerrain(state, imp, 'blighted');
-    expect(effectiveDef(state, troop)).toBe(1);
-    expect(effectiveDef(state, imp)).toBe(1);
+    expect(effectiveDef(state, troop)).toBe(base('fire-ogre').def - 1);
+    expect(effectiveDef(state, imp)).toBe(base('shadow-imp').def);
     const godUnit = state.units.find((u) => u.isGod && u.faction === 'guardian')!;
     onTerrain(state, godUnit, 'blighted');
     expect(effectiveDef(state, godUnit)).toBe(3);
@@ -70,28 +73,28 @@ describe('terrain modifiers', () => {
     const state = newGame(['fire']);
     const troop = place(state, 'fire-ogre', { x: 1, y: 5 }, 'fire');
     onTerrain(state, troop, 'plains');
-    expect(effectiveAtk(state, troop)).toBe(3);
-    expect(effectiveDef(state, troop)).toBe(2);
-    expect(effectiveMov(state, troop)).toBe(1);
+    expect(effectiveAtk(state, troop)).toBe(base('fire-ogre').atk);
+    expect(effectiveDef(state, troop)).toBe(base('fire-ogre').def);
+    expect(effectiveMov(state, troop)).toBe(base('fire-ogre').mov);
   });
 
   it('Flying ignores terrain MOV penalties', () => {
     const state = newGame(['earth']);
-    const pegasus = place(state, 'earth-pegasus', { x: 1, y: 5 }, 'earth'); // MOV 4, flying, earth
+    const pegasus = place(state, 'earth-pegasus', { x: 1, y: 5 }, 'earth'); // flying, earth
     onTerrain(state, pegasus, 'gale'); // earth -1 MOV would apply
-    expect(effectiveMov(state, pegasus)).toBe(4);
+    expect(effectiveMov(state, pegasus)).toBe(base('earth-pegasus').mov);
   });
 
   it('unit terrain riders: Pixie on Gale, Kelpie on Tide', () => {
     const state = newGame(['wind', 'water']);
-    const pixie = place(state, 'wind-pixie', { x: 1, y: 5 }, 'wind'); // MOV 4
+    const pixie = place(state, 'wind-pixie', { x: 1, y: 5 }, 'wind');
     onTerrain(state, pixie, 'gale');
     // +1 element bonus and +1 rider
-    expect(effectiveMov(state, pixie)).toBe(6);
-    const kelpie = place(state, 'water-kelpie', { x: 3, y: 5 }, 'water'); // ATK 2, MOV 3
+    expect(effectiveMov(state, pixie)).toBe(base('wind-pixie').mov + 2);
+    const kelpie = place(state, 'water-kelpie', { x: 3, y: 5 }, 'water');
     onTerrain(state, kelpie, 'tide');
-    expect(effectiveAtk(state, kelpie)).toBe(4); // +1 element +1 rider
-    expect(effectiveMov(state, kelpie)).toBe(4);
+    expect(effectiveAtk(state, kelpie)).toBe(base('water-kelpie').atk + 2); // +1 element +1 rider
+    expect(effectiveMov(state, kelpie)).toBe(base('water-kelpie').mov + 1);
   });
 });
 

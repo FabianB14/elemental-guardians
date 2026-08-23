@@ -44,7 +44,7 @@ export function resolveAttack(
   defender: Unit,
   options: CombatOptions = {},
 ): CombatOutcome {
-  const damage = options.damage ?? 1;
+  const damage = options.damage ?? hasAbility(attacker, 'heavyBlow')?.damage ?? 1;
   const evasive = hasAbility(defender, 'evasive')?.amount ?? 0;
 
   const attackDie = rng.d6();

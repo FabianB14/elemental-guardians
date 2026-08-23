@@ -48,6 +48,8 @@ export type Ability =
   | { tag: 'ranged'; range: number }
   /** May attack twice in one Action Phase. */
   | { tag: 'doubleAttack' }
+  /** Successful attacks deal this much damage instead of 1. */
+  | { tag: 'heavyBlow'; damage: number }
   /** May attack twice if it did not move this turn. */
   | { tag: 'doubleAttackIfStill' }
   /** +atk on a turn it moved at least `minTiles` tiles. */
