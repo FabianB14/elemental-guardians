@@ -5,6 +5,7 @@
  * It is intentionally basic — its job is smoke-testing balance, not brilliance.
  */
 import { cardDef } from '../data/cards';
+import { unitDef as unitDefOf } from '../data/units';
 import type { Element } from '../data/types';
 import {
   distance,
@@ -26,15 +27,32 @@ import {
 } from '../engine/stats';
 import type { Action, GameState, Unit } from '../engine/types';
 
+/**
+ * Strategy: turtle near home while evil streams into the guardians' kill
+ * zone (the evil AI always advances), then push everything at the nearest
+ * evil god once the army has massed or the clock is running down.
+ */
+const PUSH_ROUND = 6;
+const PUSH_ARMY = 6;
+
+function pushing(state: GameState): boolean {
+  const army = livingUnits(state).filter(
+    (u) => u.faction === 'guardian' && !u.isGod,
+  ).length;
+  return state.round >= PUSH_ROUND || army >= PUSH_ARMY;
+}
+
 /** Runs one full round (summon → action → endPhase → discard) via the bot. */
 export function botStep(state: GameState): GameState {
+  const endPhase = (s: GameState): GameState =>
+    s.result === 'ongoing' ? applyAction(s, { type: 'endPhase' }).state : s;
   switch (state.phase) {
     case 'summon':
-      return applyAction(botSummonPhase(state), { type: 'endPhase' }).state;
+      return endPhase(botSummonPhase(state));
     case 'action':
-      return applyAction(botActionPhase(state), { type: 'endPhase' }).state;
+      return endPhase(botActionPhase(state));
     case 'discard':
-      return applyAction(botDiscardPhase(state), { type: 'endPhase' }).state;
+      return endPhase(botDiscardPhase(state));
     default:
       return state;
   }
@@ -47,6 +65,11 @@ export function botPlay(state: GameState, maxSteps = 1000): GameState {
     current = botStep(current);
   }
   return current;
+}
+
+function isGeneralCard(defId: string): boolean {
+  const def = cardDef(defId);
+  return def.kind === 'summon' && !!unitDefOf(def.unitDefId).isGeneral;
 }
 
 function trySafe(state: GameState, action: Action): GameState {
@@ -68,10 +91,15 @@ function botSummonPhase(state: GameState): GameState {
       const guardian = current.guardians.find((g) => g.element === element)!;
       if (!godAlive(current, guardian.godId)) break;
 
-      // Cheapest summon we can afford while keeping one card in reserve.
+      // General first (it carries the god-killing power), then cheap bodies.
       const summons = guardian.hand
         .filter((c) => cardDef(c.defId).kind === 'summon')
-        .sort((a, b) => cardDef(a.defId).cost - cardDef(b.defId).cost || a.id.localeCompare(b.id));
+        .sort((a, b) => {
+          const generalA = a.defId.includes('summon-') && isGeneralCard(a.defId) ? 0 : 1;
+          const generalB = b.defId.includes('summon-') && isGeneralCard(b.defId) ? 0 : 1;
+          if (generalA !== generalB) return generalA - generalB;
+          return cardDef(a.defId).cost - cardDef(b.defId).cost || a.id.localeCompare(b.id);
+        });
       const card = summons.find(
         (c) => cardDef(c.defId).cost <= guardian.hand.length - 2,
       );
@@ -188,11 +216,22 @@ function botUnitTurn(state: GameState, unitId: number): GameState {
   // Attack if something is already in range.
   let target = pickBotTarget(current, unit);
   if (!target) {
-    // Move toward the nearest enemy (gods stay home unless healthy).
-    const goal = nearestEnemy(current, unit);
-    if (goal && (!unit.isGod || unit.hp > unit.maxHp / 2)) {
-      const mov = effectiveMov(current, unit);
-      const dest = bestApproach(current, unit, goal, mov);
+    const me = unit;
+    const push = pushing(current);
+    // While defending, only close on enemies that already crossed mid-board;
+    // once pushing, everything marches on the nearest evil god.
+    const goal = push ? nearestEnemy(current, me) : nearestIntruder(current, me);
+    const escorted =
+      !me.isGod ||
+      livingUnits(current).some(
+        (u) => u.faction === 'guardian' && !u.isGod && distance(u.pos, me.pos) <= 2,
+      );
+    // The god leads the push: summons land within 2 of it, so an advanced
+    // god projects reinforcements straight onto the frontline.
+    const godMayMove = push && me.hp > 6 && escorted;
+    if (goal && (!me.isGod || godMayMove)) {
+      const mov = effectiveMov(current, me);
+      const dest = bestApproach(current, me, goal, mov);
       if (dest) current = trySafe(current, { type: 'move', unitId, to: dest });
       unit = unitById(current, unitId);
       if (!unit || unit.hp <= 0) return current;
@@ -239,14 +278,28 @@ function pickBotTarget(state: GameState, unit: Unit | undefined): Unit | undefin
     })[0];
 }
 
-function nearestEnemy(state: GameState, unit: Unit): Unit | undefined {
+/** While defending: only chase evil troops that crossed into our half. */
+function nearestIntruder(state: GameState, unit: Unit): Unit | undefined {
+  const half = Math.floor(state.height / 2);
   return livingUnits(state)
-    .filter((u) => u.faction === 'evil')
+    .filter((u) => u.faction === 'evil' && !u.isGod && u.pos.y >= half)
     .sort((a, b) => {
       const distDiff = distance(a.pos, unit.pos) - distance(b.pos, unit.pos);
       if (distDiff !== 0) return distDiff;
       return a.id - b.id;
     })[0];
+}
+
+/** The bot rushes the win condition: nearest evil god, else nearest unit. */
+function nearestEnemy(state: GameState, unit: Unit): Unit | undefined {
+  const byDistance = (a: Unit, b: Unit) => {
+    const distDiff = distance(a.pos, unit.pos) - distance(b.pos, unit.pos);
+    if (distDiff !== 0) return distDiff;
+    return a.id - b.id;
+  };
+  const gods = livingUnits(state).filter((u) => u.faction === 'evil' && u.isGod);
+  if (gods.length > 0) return [...gods].sort(byDistance)[0];
+  return livingUnits(state).filter((u) => u.faction === 'evil').sort(byDistance)[0];
 }
 
 function bestApproach(state: GameState, unit: Unit, goal: Unit, mov: number) {
@@ -285,7 +338,10 @@ function botPlayPowers(state: GameState, element: Element): GameState {
               u.faction === 'evil' &&
               (def.range === null || distance(u.pos, god.pos) <= def.range),
           )
-          .sort((a, b) => a.hp - b.hp || a.id - b.id)[0];
+          .sort(
+            (a, b) =>
+              (a.isGod ? 0 : 1) - (b.isGod ? 0 : 1) || a.hp - b.hp || a.id - b.id,
+          )[0];
         if (target) {
           next = trySafe(current, {
             type: 'playPower',
@@ -371,18 +427,23 @@ function botPlayCombo(state: GameState): GameState {
   return state;
 }
 
-/** Centre with the most evil units in its 3x3, needing at least 2. */
+/**
+ * Centre with the most evil units in its 3x3, needing at least 2.
+ * A centre whose area includes an evil god always wins — combos are the
+ * guardians' best reach onto the shrines.
+ */
 function bestComboCenter(state: GameState) {
   const enemies = livingUnits(state).filter((u) => u.faction === 'evil');
   let best: { x: number; y: number } | undefined;
-  let bestCount = 1;
+  let bestScore = 1;
   for (const enemy of enemies) {
-    const count = enemies.filter(
+    const inArea = enemies.filter(
       (o) =>
         Math.abs(o.pos.x - enemy.pos.x) <= 1 && Math.abs(o.pos.y - enemy.pos.y) <= 1,
-    ).length;
-    if (count > bestCount) {
-      bestCount = count;
+    );
+    const score = inArea.length + (inArea.some((o) => o.isGod) ? 100 : 0);
+    if (score > bestScore) {
+      bestScore = score;
       best = { ...enemy.pos };
     }
   }

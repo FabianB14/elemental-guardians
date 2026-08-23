@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveAttack } from '../combat';
+import { effectiveAtk, effectiveDef } from '../stats';
 import { Rng } from '../rng';
 import type { GameEvent } from '../types';
 import { findRngFor, newGame, place } from './helpers';
@@ -42,11 +43,14 @@ describe('combat resolution', () => {
 
   it('tie: nothing happens', () => {
     const state = newGame(['fire']);
-    const attacker = place(state, 'fire-ogre', { x: 5, y: 5 }, 'fire'); // ATK 3
-    const defender = place(state, 'corrupted-golem', { x: 5, y: 6 }); // DEF 3
+    const attacker = place(state, 'fire-ogre', { x: 5, y: 5 }, 'fire');
+    const defender = place(state, 'corrupted-golem', { x: 5, y: 6 });
     const events: GameEvent[] = [];
-    // 3+3=6 vs 3+3=6 → tie
-    const rng = new Rng(rngStateForRolls(3, 3));
+    // Pick dice so attackDie + ATK === defenseDie + DEF (a forced tie).
+    const gap = effectiveDef(state, defender) - effectiveAtk(state, attacker);
+    const defenseDie = gap >= 0 ? 1 : 1 - gap;
+    const attackDie = defenseDie + gap;
+    const rng = new Rng(rngStateForRolls(attackDie, defenseDie));
     const outcome = resolveAttack(state, events, rng, attacker, defender);
     expect(outcome.result).toBe('tie');
     expect(defender.hp).toBe(defender.maxHp);
@@ -55,11 +59,15 @@ describe('combat resolution', () => {
 
   it('evasive subtracts from the attacker roll', () => {
     const state = newGame(['fire', 'wind']);
-    const attacker = place(state, 'shadow-imp', { x: 5, y: 5 }); // ATK 1
-    const nymph = place(state, 'wind-nymph', { x: 5, y: 6 }, 'wind'); // DEF 2, Evasive 1
+    const attacker = place(state, 'shadow-imp', { x: 5, y: 5 });
+    const nymph = place(state, 'wind-nymph', { x: 5, y: 6 }, 'wind'); // Evasive 1
     const events: GameEvent[] = [];
-    // 4+1-1=4 vs 2+2=4 → tie thanks to Evasive; without it, a hit.
-    const rng = new Rng(rngStateForRolls(4, 2));
+    // Dice chosen so the raw totals would win by exactly 1 — Evasive's -1
+    // turns the hit into a tie.
+    const gap = effectiveDef(state, nymph) - effectiveAtk(state, attacker) + 1;
+    const defenseDie = gap >= 0 ? 1 : 1 - gap;
+    const attackDie = defenseDie + gap;
+    const rng = new Rng(rngStateForRolls(attackDie, defenseDie));
     const outcome = resolveAttack(state, events, rng, attacker, nymph);
     expect(outcome.result).toBe('tie');
     expect(nymph.hp).toBe(nymph.maxHp);

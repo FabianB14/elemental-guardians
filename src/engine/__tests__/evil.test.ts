@@ -87,9 +87,10 @@ describe('doom deck', () => {
   it('Dark Bolt hits the nearest troop, or a god for 1 when no troops', () => {
     const state = newGame(['fire']);
     state.doomDeck = ['darkBolt', 'darkBolt'];
-    const troop = place(state, 'fire-ogre', { x: 5, y: 4 }, 'fire'); // HP 2
+    const troop = place(state, 'fire-ogre', { x: 5, y: 4 }, 'fire');
     run(state, 1);
-    expect(troop.hp).toBe(0); // 2 damage kills it
+    expect(troop.hp).toBe(troop.maxHp - 2);
+    troop.hp = 0; // clear the board so the next bolt falls through to the god
     const fireGod = god(state, 'fire');
     run(state, 1);
     expect(fireGod.hp).toBe(fireGod.maxHp - 1);
@@ -129,16 +130,17 @@ describe('doom deck', () => {
     expect(effectiveAtk(state, imp)).toBe(3);
   });
 
-  it('reveals guardians+1 cards on Normal and guardians+2 on Hard', () => {
+  it('reveals guardians+N doom cards per CONFIG difficulty', async () => {
+    const { CONFIG } = await import('../../data/config');
     const normal = newGame(['fire', 'water'], 9, 'normal');
     const events: GameEvent[] = [];
     runEvilPhase(normal, events);
-    expect(normal.stats.doomCardsResolved).toBe(3);
+    expect(normal.stats.doomCardsResolved).toBe(2 + CONFIG.doomCardsPerRound.normal);
 
     const hard = newGame(['fire', 'water'], 9, 'hard');
     const hardEvents: GameEvent[] = [];
     runEvilPhase(hard, hardEvents);
-    expect(hard.stats.doomCardsResolved).toBe(4);
+    expect(hard.stats.doomCardsResolved).toBe(2 + CONFIG.doomCardsPerRound.hard);
   });
 
   it('summon placement round-robins across evil gods', () => {

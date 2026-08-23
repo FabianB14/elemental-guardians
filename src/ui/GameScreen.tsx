@@ -4,6 +4,7 @@ import type { Coord, Element } from '../data/types';
 import { unitById } from '../engine/board';
 import { requireUltimate } from '../engine/powers';
 import { overHandLimit } from '../engine/cards';
+import { setMuted, soundsMuted } from './sound';
 import type { Action, CardInstance, ComboId, GameEvent, GameState, Unit } from '../engine/types';
 import { Board, EMPTY_HIGHLIGHTS, type BoardHighlights } from './Board';
 import { HandTray } from './HandTray';
@@ -39,6 +40,7 @@ export function GameScreen(props: { ui: UiState; dispatch: (a: UiAction) => void
   const [activeTab, setActiveTab] = useState<Element>(game.guardianOrder[0]!);
   const [pendingUltimate, setPendingUltimate] = useState<number | null>(null);
   const [recentlyHit, setRecentlyHit] = useState<Set<number>>(new Set());
+  const [mutedFlag, setMutedFlag] = useState(soundsMuted());
   const lastLogLength = useRef(0);
 
   const send = (action: Action) => dispatch({ type: 'game', action });
@@ -423,6 +425,15 @@ export function GameScreen(props: { ui: UiState; dispatch: (a: UiAction) => void
           onClick={() => send({ type: 'endPhase' })}
         >
           {endPhaseLabel}
+        </button>
+        <button
+          title="Toggle sound"
+          onClick={() => {
+            setMuted(!mutedFlag);
+            setMutedFlag(!mutedFlag);
+          }}
+        >
+          {mutedFlag ? '🔇' : '🔊'}
         </button>
         <button className="danger" onClick={() => dispatch({ type: 'quit' })}>
           Quit

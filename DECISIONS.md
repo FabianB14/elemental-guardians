@@ -57,3 +57,24 @@ Ambiguities in the design doc, resolved with the simplest reading.
     cards may come from one hand or two different guardians' hands.
 20. **Tectonic Shift** damages non-Earth units of both factions standing on
     the repainted tiles (evil units are never Earth).
+21. **Balance pass (Phase 5, sim-driven).** As written, the game was
+    unwinnable: the headless sim went 0-for-60 and evil god HP was never even
+    scratched (1-damage combat + ~15 rounds of card economy vs 20 HP gods and
+    ~3 evil units spawning per round). Tuned in /src/data, verified by
+    `npm run sim`:
+    - Evil god HP 20 → 10 (`config.GOD_STATS`).
+    - Doom cards per round: guardians+1/+2 → guardians+0 (Normal), +1 (Hard)
+      (`config.CONFIG.doomCardsPerRound`).
+    - All guardian troops and Generals +1 ATK, +1 DEF, +1 HP over the design
+      table — summons cost cards, so each body must outclass the free evil
+      spawns.
+    - Generals gained Heavy Blow (their hits deal 2 damage), leaning on the
+      combat rule's "unless an ability says more" clause; without it no god
+      could realistically die.
+    Result: the simple scripted bot wins ~30-50% on Normal (1-3 guardians)
+    and ~10% on Hard; humans should comfortably beat the bot. 4-guardian
+    games remain the hardest (4 gods to kill before the decks run dry).
+22. **Sound hooks, not sounds.** `src/ui/sound.ts` routes every engine event
+    through one `playForEvent` hook (WebAudio blips, muted by default, 🔊
+    toggle in the phase banner). Swapping in real audio assets means editing
+    only that file.

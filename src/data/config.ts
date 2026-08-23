@@ -28,8 +28,11 @@ export const CONFIG = {
   terrainDeckSize: 20,
   doomDeckSize: 40,
 
-  /** Doom cards revealed each Evil Phase = guardianCount + this. */
-  doomCardsPerRound: { normal: 1, hard: 2 } satisfies Record<Difficulty, number>,
+  /**
+   * Doom cards revealed each Evil Phase = guardianCount + this.
+   * BALANCE: tuned down from the design doc's +1/+2 — see DECISIONS.md #21.
+   */
+  doomCardsPerRound: { normal: 0, hard: 1 } satisfies Record<Difficulty, number>,
 
   /** Every Doom deck reshuffle grants evil units this much permanent ATK. */
   corruptionRisingAtk: 1,
@@ -40,9 +43,14 @@ export const CONFIG = {
   maxRounds: 60,
 } as const;
 
+/**
+ * BALANCE: evil god HP tuned down from the design doc's 20. With 1-damage
+ * combat, finite decks (~15 rounds of economy) and endless Doom spawns, sims
+ * showed 20 HP was never even scratched — see DECISIONS.md #21.
+ */
 export const GOD_STATS = {
   guardian: { hp: 20, atk: 3, def: 3, mov: 1 },
-  evil: { hp: 20, atk: 4, def: 3, mov: 0 },
+  evil: { hp: 10, atk: 4, def: 3, mov: 0 },
 } as const;
 
 export const ELEMENTS: readonly Element[] = ['fire', 'water', 'wind', 'earth'];
